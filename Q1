@@ -1,3 +1,6 @@
 1st algorithm
-    we would use the
+    we would use the tf*idf scoring method to find the relevant documents since tf tells us how common a term occurs
+    in a document while the idf score tells us how rare the term is in all the documents. Ths provides us with a very
+    reasonable way to determine which documents are important taking into consideration the overall rareness of the
+    term in the query. This is one of the most well known document representation methods.
 
