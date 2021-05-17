@@ -407,6 +407,39 @@ def rocchio_information_filtering(data: dict, tf_counts: dict, query: dict):
     return relevance_dic
 
 
+def evaluate_model(if_file: str, relevance_judge: str) -> bool:
+    if_scores = {}
+    with open(if_file, 'r') as r:
+        data = r.read().split()
+        for i, _data in enumerate(data):
+            if i % 2 == 0:
+                try:
+                    if_scores[data[i]] = data[i+1]
+                except IndexError:
+                    break
+
+    relevance_dic = {}
+    with open(relevance_judge, 'r') as r:
+        data = r.read().split('\n')
+        data.remove('')
+        for _data in data:
+            _data = _data.split(' ')
+            relevance_dic[_data[1]] = _data[2]
+
+    total_relevant = [k for k, v in relevance_dic.items() if v == '1']
+    tp = 0
+    precision_at_k = 10
+    for i, if_score in zip(range(precision_at_k), list(if_scores.keys())[:10]):
+        if if_score in total_relevant:
+            tp += 1
+
+    top_k_precision = tp/precision_at_k
+    recall = tp/len(total_relevant)
+    f1_score = (2 * top_k_precision * recall) / (top_k_precision + recall)
+
+    pass
+
+
 if __name__ == '__main__':
 
     stop_word_list = get_stop_words()
@@ -443,11 +476,16 @@ if __name__ == '__main__':
     for k, v in topic_defs.items():
         query_list[k] = filtering_stemming(v.title.split())
 
+    # Q5, algo 1
     doc = "R{}".format(files[0].split('/')[-1][-3:])
     topic_num = files[0].split('/')[-1][-3:]
     relevance_model_1 = rocchio_information_filtering(training_set[doc], dataset[0], query_list[doc])
-
     write_relevance_dat_files(relevance_model_1, topic_num)
+
+    # Q6
+    evaluate_model(if_file='IF-ROCCHIO-MODEL/IF_Result107.dat',
+                   relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training107.txt')
+
     # Q2, algo 2
     # dirichlet_scores = dirichlet_model(topic_defs, dataset[0])
 
