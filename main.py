@@ -83,6 +83,13 @@ class Corpus:
         return aux_dict
 
 
+def get_set(ls, idx):
+    for _ls in ls:
+        if str(idx) in _ls.name:
+            return _ls
+    return _ls
+
+
 def get_stop_words() -> list:
     """
     this function reads the common stop words in the file common-english-words.txt which must be in the root directory
@@ -211,16 +218,11 @@ def filtering_stemming(t: list) -> list:
     return list(stemmed_words)
 
 
-def bm25_baseline_model(queries: dict, data: dict) -> dict:
+def bm25_baseline_model(query_list: dict, data: dict) -> dict:
     """
     this function uses the bm25 model to find the score of the query in different documents, assigning a score to the
     different documents.
     """
-
-    # tokenizing the query words
-    query_list = {}
-    for k, v in queries.items():
-        query_list[k] = filtering_stemming(v.title.split())
 
     # setting the constants
     k1 = 1.2
@@ -232,75 +234,73 @@ def bm25_baseline_model(queries: dict, data: dict) -> dict:
 
     df = data.calc_df()
 
-    for key, query in query_list.items():
-        flag1 = 0
-        scores_temp0 = {}
-        for q in query:
-            scores_temp = {}
-            for i, p in zip(range(data.get_total_docs()), data.training_data.keys()):
-                temp0 = data.total_words[p] / mu
-                temp0 = b * temp0
-                temp0 = (1 - b) + temp0
-                K = k1 * temp0
+    flag1 = 0
+    scores_temp0 = {}
+    for q in query_list:
+        scores_temp = {}
+        for i, p in zip(range(data.get_total_docs()), data.training_data.keys()):
+            temp0 = data.total_words[p] / mu
+            temp0 = b * temp0
+            temp0 = (1 - b) + temp0
+            K = k1 * temp0
 
-                # numerator
-                temp_var3 = (1 + k2) * query.count(q)
-                # num/denom
-                temp_var3 = temp_var3 / (k2 + query.count(q))
+            # numerator
+            temp_var3 = (1 + k2) * query_list.count(q)
+            # num/denom
+            temp_var3 = temp_var3 / (k2 + query_list.count(q))
 
-                doc_freq = 0
-                for i in df:
-                    if i[0] == q:
-                        doc_freq = i[1]
+            doc_freq = 0
+            for i in df:
+                if i[0] == q:
+                    doc_freq = i[1]
 
-                query_doc_len = 0
-                for i in data.training_data[p].values():
-                    if q == i[0]:
-                        query_doc_len = i[1]
-                # numerator
-                temp_var2 = (1 + k1) * query_doc_len
-                # num/denom
-                temp_var2 = temp_var2 / (K + query_doc_len)
+            query_doc_len = 0
+            for i in data.training_data[p].values():
+                if q == i[0]:
+                    query_doc_len = i[1]
+            # numerator
+            temp_var2 = (1 + k1) * query_doc_len
+            # num/denom
+            temp_var2 = temp_var2 / (K + query_doc_len)
 
-                temp_var1 = len(files) + 0.5  # numerator
-                temp_var1 = temp_var1 / (doc_freq + 0.5)  # num/denom
-                temp_var1 = log(temp_var1, 10)  # taking log
+            temp_var1 = len(files) + 0.5  # numerator
+            temp_var1 = temp_var1 / (doc_freq + 0.5)  # num/denom
+            temp_var1 = log(temp_var1, 10)  # taking log
 
-                final_var = temp_var1 * temp_var2 * temp_var3
-                scores_temp[p] = final_var
+            final_var = temp_var1 * temp_var2 * temp_var3
+            scores_temp[p] = final_var
 
-            if flag1 == 0:
-                for a, b in zip(scores_temp.keys(), sample_list):
-                    scores_temp0[a] = scores_temp[a] + b
-                flag1 = 1
-            else:
-                for a, b in zip(scores_temp0.keys(), scores_temp.values()):
-                    scores_temp0[a] = scores_temp0[a] + b
+        if flag1 == 0:
+            for a, b in zip(scores_temp.keys(), sample_list):
+                scores_temp0[a] = scores_temp[a] + b
+            flag1 = 1
+        else:
+            for a, b in zip(scores_temp0.keys(), scores_temp.values()):
+                scores_temp0[a] = scores_temp0[a] + b
 
-        scores[key] = scores_temp0
-
-    return scores
+    return scores_temp0
 
 
-def write_dat_files(scores: dict) -> bool:
+def write_dat_files(score: dict, idx: str) -> bool:
     """
     this writes bm25 model scores to files in the folder BM25 which is in the root folder
     """
     # create the BM25 folder if does not exist
     if not os.path.exists('BM25'):
         os.mkdir('BM25')
+
+    topic_num = "R{}".format(101 + idx)
     # looping over the 50 queries and writing score files one by one
-    for c, score in zip(range(1, 51, 1), scores.keys()):
-        with open('BM25/B_Result{0}.dat'.format(c), 'w', encoding='utf-8') as w:
-            # sorting the dictionary in descending order
-            sorted_scores = {k: v for k, v in sorted(scores[score].items(), key=lambda item: item[1], reverse=True)}
-            # looping over the sorted scores and writing to file
-            for k, v in sorted_scores.items():
-                w.write('{} {}\n'.format(k, v))
+    with open('BM25/B_Result{0}.dat'.format(1+idx), 'w', encoding='utf-8') as w:
+        # sorting the dictionary in descending order
+        sorted_scores = {k: v for k, v in sorted(score.items(), key=lambda item: item[1], reverse=True)}
+        # looping over the sorted scores and writing to file
+        for k, v in sorted_scores.items():
+            w.write('{} {}\n'.format(k, v if v > 0 else 0))
     return True
 
 
-def write_tfidf_files(scores: dict) -> dict:
+def write_tfidf_files(score: dict, idx: int) -> dict:
     """
     this writs the tf idf scores to files in the folder TF-IDF which is in the root folder
     """
@@ -308,48 +308,38 @@ def write_tfidf_files(scores: dict) -> dict:
     if not os.path.exists('TF-IDF'):
         os.mkdir('TF-IDF')
 
-    training_set = {}
+    topic_num = "R{}".format(101+idx)
     # looping over the 50 queries and writing score files one by one
-    for c, score in zip(range(1, 51, 1), scores.keys()):
-        with open('TF-IDF/{0}.txt'.format(score), 'w', encoding='utf-8') as w:
-            sorted_scores = {k: v for k, v in sorted(scores[score].items(), key=lambda item: item[1], reverse=True)}
-            for k, v in sorted_scores.items():
-                # if it is the first item in the dictionary of dictionaries then, we try except the error and create
-                # new dictionary
-                try:
-                    training_set[score][k] = 1 if v != 0 else 0
-                except KeyError:
-                    training_set[score] = {}
-                    training_set[score][k] = 1 if v != 0 else 0
-
-                w.write('{0} {1} {2}\n'.format(score, k, 1 if v != 0 else 0))
-    return training_set
+    # for c, score in zip(range(1, 51, 1), scores.keys()):
+    with open('TF-IDF/{0}.txt'.format(topic_num), 'w', encoding='utf-8') as w:
+        sorted_scores = {k: v for k, v in sorted(score.items(), key=lambda item: item[1], reverse=True)}
+        for k, v in sorted_scores.items():
+            w.write('{0} {1} {2}\n'.format(topic_num, k, 1 if v != 0 else 0))
+    return sorted_scores
 
 
 def tf_idf_model(queries: dict, data: dict) -> dict:
     # tokenizing the query words
-    query_list = {}
-    for k, v in queries.items():
-        query_list[k] = filtering_stemming(v.title.split())
+    query_list = filtering_stemming(queries.title.split())
 
     df = data.calc_df()
     all_scores = {}
 
-    for key, query in query_list.items():
-        scores = {}
-        for doc_key, pair_dc in data.training_data.items():
-            tf_idf = 0
-            for q in query:
-                # (0, 0) incase the query word q does not exist in the training_data corpus
-                pair = pair_dc.get(q, False)
-                if pair is not False:
-                    # calculating the tf idf score
-                    tf_idf += pair[1] * log(data.get_total_docs()/df.get(q, 0))
-                    break
-            scores[doc_key] = tf_idf
-        all_scores[key] = scores
+    # for key, query in query_list.items():
+    scores = {}
+    for doc_key, pair_dc in data.training_data.items():
+        tf_idf = 0
+        for q in query_list:
+            # (0, 0) incase the query word q does not exist in the training_data corpus
+            pair = pair_dc.get(q, False)
+            if pair is not False:
+                # calculating the tf idf score
+                tf_idf += pair[1] * log(data.get_total_docs()/df.get(q, 0))
+                break
+        scores[doc_key] = tf_idf
+        # all_scores[key] = scores
 
-    return all_scores
+    return scores
 
 
 # def dirichlet_model(queries: dict, data: dict) -> dict:
@@ -407,7 +397,7 @@ def write_relevance_dat_files(relevance_dc: dict, topic: str) -> bool:
     if not os.path.exists(folder):
         os.mkdir(folder)
 
-    with open('{0}/IF_Result{1}.dat'.format(folder, topic), 'w', encoding='utf-8') as w:
+    with open('{0}/IF_Result{1}.dat'.format(folder, topic+101), 'w', encoding='utf-8') as w:
         for score in relevance_dc.items():
             w.write('{0} {1}\n'.format(score[0], score[1]))
 
@@ -474,7 +464,7 @@ def evaluate_model(if_file: str, relevance_judge: str) -> bool:
     relevance_dic = {}
     with open(relevance_judge, 'r') as r:
         data = r.read().split('\n')
-        data.remove('')
+        data = filter(lambda x: x != "", data)
         for _data in data:
             _data = _data.split(' ')
             relevance_dic[_data[1]] = _data[2]
@@ -488,9 +478,12 @@ def evaluate_model(if_file: str, relevance_judge: str) -> bool:
 
     top_k_precision = tp/precision_at_k
     recall = tp/len(total_relevant)
-    f1_score = (2 * top_k_precision * recall) / (top_k_precision + recall)
+    if top_k_precision + recall == 0:
+        f1_score = 0
+    else:
+        f1_score = (2 * top_k_precision * recall) / (top_k_precision + recall)
 
-    return True
+    return top_k_precision, recall, f1_score
 
 
 if __name__ == '__main__':
@@ -502,12 +495,12 @@ if __name__ == '__main__':
     files = glob(path)
 
     """all document"""
-    # for file in files:
-    #     dataset.append(loads_dataset(file))
+    for file in files:
+        dataset.append(loads_dataset(file))
 
     """one document"""
     # R107
-    dataset.append(loads_dataset(files[0]))
+    # dataset.append(loads_dataset(files[0]))
     topic_defs = {}
 
     with open("Tasks2/Tasks2/Topic_definitions.txt") as read:
@@ -522,28 +515,43 @@ if __name__ == '__main__':
                 topic_defs[doc_num] = Topics(_title=title)
 
     # Q2, algo 1
-    tf_idf_scores = tf_idf_model(topic_defs, dataset[0])
-    training_set = write_tfidf_files(tf_idf_scores)
+    ls_tf_idf_score = {}
+    for idx in range(50):
+        doc_num = "R{}".format(101+idx)
+        tf_idf_scores = tf_idf_model(topic_defs[doc_num], get_set(dataset, 101+idx))
+        dc = write_tfidf_files(tf_idf_scores, idx)
+        ls_tf_idf_score[doc_num] = dc
 
+    # tokenizing the query words
     query_list = {}
     for k, v in topic_defs.items():
         query_list[k] = filtering_stemming(v.title.split())
 
     # Q5, algo 1
-    doc = "R{}".format(files[0].split('/')[-1][-3:])
-    topic_num = files[0].split('/')[-1][-3:]
-    relevance_model_1 = rocchio_information_filtering(training_set[doc], dataset[0], query_list[doc])
-    write_relevance_dat_files(relevance_model_1, topic_num)
+    for idx in range(50):
+        doc_num = "R{}".format(101+idx)
+        relevance_model_1 = rocchio_information_filtering(ls_tf_idf_score[doc_num], get_set(dataset, 101+idx),
+                                                          query_list[doc_num])
+        write_relevance_dat_files(relevance_model_1, idx)
 
     # Q6
-    evaluate_model(if_file='IF-ROCCHIO-MODEL/IF_Result107.dat',
-                   relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training107.txt')
+    with open('EResult1.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for idx in range(101, 151, 1):
+            t, r, f, = evaluate_model(if_file='IF-ROCCHIO-MODEL/IF_Result{0}.dat'.format(idx),
+                                      relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training{0}.txt'.format(idx))
+            p = round(t, 4)
+            r = round(r, 4)
+            f = round(f, 4)
+            w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
 
     # Q2, algo 2
     # dirichlet_scores = dirichlet_model(topic_defs, dataset[0])
 
     # Q3
-    bm25_scores = bm25_baseline_model(topic_defs, dataset[0])
-    write_dat_files(bm25_scores)
-
-
+    ls_bm25_scores = {}
+    for idx in range(50):
+        doc_num = "R{}".format(101+idx)
+        dc = bm25_baseline_model(query_list=query_list[doc_num], data=get_set(dataset, 101+idx))
+        write_dat_files(score=dc, idx=idx)
+        ls_bm25_scores[doc_num] = dc

@@ -2,3 +2,4 @@ venv
 .idea
 BM25
 TF-IDF
+IF-ROCCHIO-MODEL
