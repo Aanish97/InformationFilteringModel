@@ -20,31 +20,52 @@ class Topics:
 
 class Corpus:
     """
-    this would have docs of 1 complete Training set e.g. Training105
+    this would have docs of 1 complete Training set i.e. dataset101-150/Training105
     """
 
     def __init__(self, training_set_name):
+        """
+        constructor for the corpus class which holds the details of the training data
+        """
         self.training_data = {}
         self.total_words = {}
         self.name = training_set_name
 
     def add_item(self, training_data, doc_id, total_words):
+        """
+        this adds a dictionary of training words and the total word counts of a document to the private members
+        training_data and total_words
+        """
         self.training_data[doc_id] = training_data
         self.total_words[doc_id] = total_words
 
     def get_avg_doc_len(self):
+        """
+        this returns the average document lenght of all the documents in the specific folder
+        """
         return round(sum(self.total_words.values())/len(self.total_words.keys()))
 
     def get_total_docs(self):
+        """
+        this returns the total number of documents in the training folder i.e. dataset101-150/Training105
+        """
         return len(self.total_words.keys())
 
     def get_new_vector(self):
+        """
+        this returns an empty list which has the exact length as the number of terms in the training folder
+        i.e. dataset101-150/Training105
+        """
         df = self.calc_df()
         for i in df.values():
             i = 0
         return df.fromkeys(df, 0)
 
     def calc_df(self):
+        """
+        this returns the dictionary of all terms in the document with key:value pair as term:(total count in training
+        folder) i.e. dataset101-150/Training105
+        """
         aux_dict = {}
         for i in self.training_data.keys():
             for j in self.training_data[i].keys():
@@ -64,6 +85,7 @@ class Corpus:
 
 def get_stop_words() -> list:
     """
+    this function reads the common stop words in the file common-english-words.txt which must be in the root directory
     :return: list of all the stop words in the folder
     """
     path_stop_list = "common-english-words.txt"
@@ -73,7 +95,7 @@ def get_stop_words() -> list:
     return stop_list.split(',')
 
 
-def parse_doc(file: str) -> list:
+def parse_doc(file: str):
     """
     :param file: the xml file which needs to be parsed
     :return: new_dic, (docid, word_count)
@@ -168,6 +190,10 @@ def loads_dataset(name: list) -> Corpus:
 
 
 def filtering_stemming(t: list) -> list:
+    """
+    this returns the list of all the preprocessed words, i.e. removing null words, converting all words to lower case,
+    applying stop words from the get_stop_words function and finally stemming them using the Porter2Stemmer
+    """
     # removing nulls
     t = list(filter(None, t))
 
@@ -186,12 +212,17 @@ def filtering_stemming(t: list) -> list:
 
 
 def bm25_baseline_model(queries: dict, data: dict) -> dict:
+    """
+    this function uses the bm25 model to find the score of the query in different documents, assigning a score to the
+    different documents.
+    """
 
     # tokenizing the query words
     query_list = {}
     for k, v in queries.items():
         query_list[k] = filtering_stemming(v.title.split())
 
+    # setting the constants
     k1 = 1.2
     k2 = 100  # can be changed btw 0 to 1000
     b = 0.75
@@ -252,25 +283,39 @@ def bm25_baseline_model(queries: dict, data: dict) -> dict:
 
 
 def write_dat_files(scores: dict) -> bool:
+    """
+    this writes bm25 model scores to files in the folder BM25 which is in the root folder
+    """
+    # create the BM25 folder if does not exist
     if not os.path.exists('BM25'):
         os.mkdir('BM25')
+    # looping over the 50 queries and writing score files one by one
     for c, score in zip(range(1, 51, 1), scores.keys()):
         with open('BM25/B_Result{0}.dat'.format(c), 'w', encoding='utf-8') as w:
+            # sorting the dictionary in descending order
             sorted_scores = {k: v for k, v in sorted(scores[score].items(), key=lambda item: item[1], reverse=True)}
+            # looping over the sorted scores and writing to file
             for k, v in sorted_scores.items():
                 w.write('{} {}\n'.format(k, v))
     return True
 
 
 def write_tfidf_files(scores: dict) -> dict:
+    """
+    this writs the tf idf scores to files in the folder TF-IDF which is in the root folder
+    """
+    # create the TF-IDF folder if does not exist
     if not os.path.exists('TF-IDF'):
         os.mkdir('TF-IDF')
 
     training_set = {}
+    # looping over the 50 queries and writing score files one by one
     for c, score in zip(range(1, 51, 1), scores.keys()):
         with open('TF-IDF/{0}.txt'.format(score), 'w', encoding='utf-8') as w:
             sorted_scores = {k: v for k, v in sorted(scores[score].items(), key=lambda item: item[1], reverse=True)}
             for k, v in sorted_scores.items():
+                # if it is the first item in the dictionary of dictionaries then, we try except the error and create
+                # new dictionary
                 try:
                     training_set[score][k] = 1 if v != 0 else 0
                 except KeyError:
@@ -353,6 +398,11 @@ def tf_idf_model(queries: dict, data: dict) -> dict:
 
 
 def write_relevance_dat_files(relevance_dc: dict, topic: str) -> bool:
+    """
+    this writes the information filtering rocchio model scores to files in the folder IF-ROCCHIO-MODEL which is in
+    the root folder
+    """
+    # creating the folder if it does not exist
     folder = 'IF-ROCCHIO-MODEL'
     if not os.path.exists(folder):
         os.mkdir(folder)
@@ -408,6 +458,9 @@ def rocchio_information_filtering(data: dict, tf_counts: dict, query: dict):
 
 
 def evaluate_model(if_file: str, relevance_judge: str) -> bool:
+    """
+    this calculates the precision, recall and f1 score of the models, model can be passed in as a parameter 'if_file'
+    """
     if_scores = {}
     with open(if_file, 'r') as r:
         data = r.read().split()
@@ -437,7 +490,7 @@ def evaluate_model(if_file: str, relevance_judge: str) -> bool:
     recall = tp/len(total_relevant)
     f1_score = (2 * top_k_precision * recall) / (top_k_precision + recall)
 
-    pass
+    return True
 
 
 if __name__ == '__main__':
