@@ -47,6 +47,16 @@ class Corpus:
         """
         return round(sum(self.total_words.values())/len(self.total_words.keys()))
 
+    def get_total_docs_containing_term(self, term):
+        """
+        this returns the total number of documents which contain the term
+        """
+        return len([1 for val in self.training_data.values() if term in val.keys()])
+
+    def get_count_in_relevant_docs(self, term, relevant_docs):
+
+        return len([key for key, val in self.training_data.items() if term in val.keys() if key in relevant_docs])
+
     def get_total_corpus_words(self):
         """
         this returns the total number of words in the folder i.e. Training101
@@ -381,17 +391,17 @@ def dirichlet_model(queries: dict, data: dict) -> dict:
     return scores
 
 
-def write_relevance_dat_files(relevance_dc: dict, topic: str) -> bool:
+def write_relevance_dat_files(relevance_dc: dict, topic: str, folder_name: str) -> bool:
     """
     this writes the information filtering rocchio model scores to files in the folder IF-ROCCHIO-MODEL which is in
     the root folder
     """
     # creating the folder if it does not exist
-    folder = 'IF-ROCCHIO-MODEL'
+    folder = folder_name
     if not os.path.exists(folder):
         os.mkdir(folder)
 
-    with open('{0}/IF_Result{1}.dat'.format(folder, topic+101), 'w', encoding='utf-8') as w:
+    with open('{0}/{2}{1}.dat'.format(folder, topic+101, folder_name), 'w', encoding='utf-8') as w:
         for score in relevance_dc.items():
             w.write('{0} {1}\n'.format(score[0], score[1]))
 
@@ -430,12 +440,49 @@ def rocchio_information_filtering(data: dict, tf_counts: dict, query: dict):
                 query_df[val[0]] -= d * (gamma/list(data.values()).count(0))
 
     # these are the features
-    features = [k for k, v in query_df.items() if v > 0]
+    features = [key for key, val in query_df.items() if val > 0]
 
     relevance_dic = {}
     for key, val in tf_counts.training_data.items():
         for _f in features:
             relevance_dic[key] = query_df[_f] * (1 if _f in val.keys() else 0) + relevance_dic.get(key, 0)
+
+    relevance_dic = {k: v for k, v in sorted(relevance_dic.items(), key=lambda item: item[1], reverse=True)}
+    return relevance_dic
+
+
+def probability_based_information_filtering(data: dict, tf_counts: dict, query: dict):
+    query_df = tf_counts.get_new_vector()
+    idf_scores = tf_counts.calc_df()
+
+    # number of relevant documents which contain the query word
+    relevant_docs = [key for key, val in data.items() if val != 0]
+
+    N = tf_counts.get_total_docs()
+    R = len(relevant_docs)
+    dc_n = tf_counts.calc_df()
+    # number of documents which contain the query word
+    # dc_n = {q: tf_counts.get_total_docs_containing_term(q) for q in query}
+
+    dc_r = {q: tf_counts.get_count_in_relevant_docs(q, relevant_docs) for q in dc_n.keys()}
+
+    _temp_n = {k: i+0.5 for k, i in dc_r.items()}
+    _temp_d = {k: R+i+0.5 for k, i in dc_r.items()}
+    weight_vector_n = {k: i/_temp_d[k] for k, i in _temp_n.items()}
+
+    _temp_n = {k: dc_n[k]-i+0.5 for k, i in dc_r.items()}
+    _temp_d = {k: (N-dc_n[k])-(R-i)+0.5 for k, i in dc_r.items()}
+    weight_vector_d = {k: i / _temp_d[k] for k, i in _temp_n.items()}
+
+    weight_vector = {k: i / weight_vector_d[k] for k, i in weight_vector_n.items()}
+
+    relevance_dic = {}
+    for key, doc in tf_counts.training_data.items():
+        _sum = 0
+        for term in doc.keys():
+            if term in weight_vector.keys():
+                _sum += weight_vector[term]
+        relevance_dic[key] = _sum
 
     relevance_dic = {k: v for k, v in sorted(relevance_dic.items(), key=lambda item: item[1], reverse=True)}
     return relevance_dic
@@ -534,7 +581,15 @@ if __name__ == '__main__':
         doc_num = "R{}".format(101+idx)
         relevance_model_1 = rocchio_information_filtering(ls_tf_idf_score[doc_num], get_set(dataset, 101+idx),
                                                           query_list[doc_num])
-        write_relevance_dat_files(relevance_model_1, idx)
+        write_relevance_dat_files(relevance_model_1, idx, 'IF-ROCCHIO-MODEL')
+
+    # Q5, algo 2
+    for idx in range(50):
+        doc_num = "R{}".format(101+idx)
+        relevance_model_2 = probability_based_information_filtering(ls_tf_idf_score[doc_num],
+                                                                    get_set(dataset, 101+idx),
+                                                                    query_list[doc_num])
+        write_relevance_dat_files(relevance_model_2, idx, 'PROBABALISTIC_MODEL')
 
     # Q6
     with open('EResult1.dat', 'w', encoding='utf-8') as w:
