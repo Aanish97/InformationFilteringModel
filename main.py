@@ -5,6 +5,8 @@ import string
 from math import log
 from glob import glob
 from porter2stemmer import Porter2Stemmer
+import numpy as np
+# from scipy import stats
 
 
 class Topics:
@@ -44,6 +46,12 @@ class Corpus:
         this returns the average document lenght of all the documents in the specific folder
         """
         return round(sum(self.total_words.values())/len(self.total_words.keys()))
+
+    def get_total_corpus_words(self):
+        """
+        this returns the total number of words in the folder i.e. Training101
+        """
+        return sum(self.total_words.values())
 
     def get_total_docs(self):
         """
@@ -281,17 +289,16 @@ def bm25_baseline_model(query_list: dict, data: dict) -> dict:
     return scores_temp0
 
 
-def write_dat_files(score: dict, idx: str) -> bool:
+def write_dat_files(score: dict, idx: str, folder_name: str) -> bool:
     """
     this writes bm25 model scores to files in the folder BM25 which is in the root folder
     """
     # create the BM25 folder if does not exist
-    if not os.path.exists('BM25'):
-        os.mkdir('BM25')
+    if not os.path.exists(folder_name):
+        os.mkdir(folder_name)
 
-    topic_num = "R{}".format(101 + idx)
     # looping over the 50 queries and writing score files one by one
-    with open('BM25/B_Result{0}.dat'.format(1+idx), 'w', encoding='utf-8') as w:
+    with open('{1}/B_Result{0}.dat'.format(1+idx, folder_name), 'w', encoding='utf-8') as w:
         # sorting the dictionary in descending order
         sorted_scores = {k: v for k, v in sorted(score.items(), key=lambda item: item[1], reverse=True)}
         # looping over the sorted scores and writing to file
@@ -300,18 +307,18 @@ def write_dat_files(score: dict, idx: str) -> bool:
     return True
 
 
-def write_tfidf_files(score: dict, idx: int) -> dict:
+def write_tfidf_files(score: dict, idx: int, folder_name: str) -> dict:
     """
     this writs the tf idf scores to files in the folder TF-IDF which is in the root folder
     """
     # create the TF-IDF folder if does not exist
-    if not os.path.exists('TF-IDF'):
-        os.mkdir('TF-IDF')
+    if not os.path.exists(folder_name):
+        os.mkdir(folder_name)
 
     topic_num = "R{}".format(101+idx)
     # looping over the 50 queries and writing score files one by one
     # for c, score in zip(range(1, 51, 1), scores.keys()):
-    with open('TF-IDF/{0}.txt'.format(topic_num), 'w', encoding='utf-8') as w:
+    with open('{1}/{0}.txt'.format(topic_num, folder_name), 'w', encoding='utf-8') as w:
         sorted_scores = {k: v for k, v in sorted(score.items(), key=lambda item: item[1], reverse=True)}
         for k, v in sorted_scores.items():
             w.write('{0} {1} {2}\n'.format(topic_num, k, 1 if v != 0 else 0))
@@ -342,49 +349,36 @@ def tf_idf_model(queries: dict, data: dict) -> dict:
     return scores
 
 
-# def dirichlet_model(queries: dict, data: dict) -> dict:
-#
-#     query_list = {}
-#     for k, v in queries.items():
-#         query_list[k] = filtering_stemming(v.title.split())
-#
-#     scores = {}
-#     sample_list = [1] * total_documents_in_corpus
-#
-#     lemda = 0
-#     lemda0 = 0
-#     lemda_1 = 0
-#     lemda_10 = 0
-#     score = 0
-#     query_id = 0
-#     mu = sum(avg_doc_length) / len(avg_doc_length)
-#     for query in query_list:
-#         flag1 = 0
-#         scores_temp0 = []
-#         for q in query:
-#             scores_temp = []
-#             for i in range(total_documents_in_corpus):
-#                 lemda = avg_doc_length[i] / (mu + avg_doc_length[i])
-#                 lemda_1 = mu / (mu + avg_doc_length[i])
-#                 lemda0 = 0
-#                 lemda_10 = 0
-#                 if 0 != avg_doc_length[i]:
-#                     lemda0 = (document_frequency[q][i] / avg_doc_length[i])
-#
-#                 if q in prob_corpus_occurences.keys():
-#                     lemda_10 = prob_corpus_occurences[q] / total_words
-#
-#                 score = (lemda * lemda0) + (lemda_1 * lemda_10)
-#                 scores_temp.append(score)
-#
-#             # print(scores_temp)
-#             if flag1 == 0:
-#                 scores_temp0 = [a * b for a, b in zip(scores_temp, sample_list)]
-#                 flag1 = 1
-#             else:
-#                 scores_temp0 = [a * b for a, b in zip(scores_temp0, scores_temp)]
-#
-#         scores[query_id] = scores_temp0
+def dirichlet_model(queries: dict, data: dict) -> dict:
+
+    q_list = filtering_stemming(queries.title.split())
+
+    # constant is the average document length
+    mu = data.get_avg_doc_len()
+    df = data.calc_df()
+
+    scores = {}
+    for doc_key, value in data.training_data.items():
+        temp = 0
+        for q in q_list:
+            score_foreground = data.total_words[doc_key] / (mu + data.total_words[doc_key])
+            if data.total_words[doc_key] != 0:
+                # probability of the query word in the document
+                score_foreground *= (df.get(q, 0) / data.total_words[doc_key])
+            else:
+                score_foreground = 0
+
+            score_background = mu / (mu + data.total_words[doc_key])
+            if q in value.keys():
+                # probability of the query word in the corpus
+                score_background *= df.get(q, 0) / data.get_total_corpus_words()
+            else:
+                score_background = 0
+            temp += score_foreground + score_background
+
+        scores[doc_key] = temp
+
+    return scores
 
 
 def write_relevance_dat_files(relevance_dc: dict, topic: str) -> bool:
@@ -514,13 +508,21 @@ if __name__ == '__main__':
             if title:
                 topic_defs[doc_num] = Topics(_title=title)
 
-    # Q2, algo 1
+    # Q2, algo 1, tf idf model
     ls_tf_idf_score = {}
     for idx in range(50):
         doc_num = "R{}".format(101+idx)
         tf_idf_scores = tf_idf_model(topic_defs[doc_num], get_set(dataset, 101+idx))
-        dc = write_tfidf_files(tf_idf_scores, idx)
+        dc = write_tfidf_files(tf_idf_scores, idx, 'TF-IDF')
         ls_tf_idf_score[doc_num] = dc
+
+    # Q2, algo 2, Dirichlet smoothing
+    ls_dirichlet_score = {}
+    for idx in range(50):
+        doc_num = "R{}".format(101+idx)
+        dirichlet_scores = dirichlet_model(topic_defs[doc_num], get_set(dataset, 101+idx))
+        dc = write_dat_files(dirichlet_scores, idx, 'DIRICHLET')
+        ls_dirichlet_score[doc_num] = dc
 
     # tokenizing the query words
     query_list = {}
@@ -553,5 +555,21 @@ if __name__ == '__main__':
     for idx in range(50):
         doc_num = "R{}".format(101+idx)
         dc = bm25_baseline_model(query_list=query_list[doc_num], data=get_set(dataset, 101+idx))
-        write_dat_files(score=dc, idx=idx)
+        write_dat_files(score=dc, idx=idx, folder_name='BM25')
         ls_bm25_scores[doc_num] = dc
+
+    with open('EResult2.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for idx in range(101, 151, 1):
+            t, r, f, = evaluate_model(if_file='BM25/B_Result{0}.dat'.format(idx-100),
+                                      relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training{0}.txt'.format(idx))
+            p = round(t, 4)
+            r = round(r, 4)
+            f = round(f, 4)
+            w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
+
+
+"""
+EResult1.dat is for the IF-ROCCHIO model
+EResult2.dat is for the basline bm25 model
+"""
