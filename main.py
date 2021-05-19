@@ -342,7 +342,8 @@ def write_tfidf_files(score: dict, idx: int, folder_name: str) -> dict:
 def tf_idf_model(queries: dict, data: dict) -> dict:
     """
     this function uses the tfidf model to find the scores of the query in different documents, assigning a score to the
-    document in one of the training_set folders
+    document in one of the training_set folders, the score is calculated in such a way:
+    normalized term frequency * normalized inverse document frequency
     """
     # tokenizing the query words
     query_list = filtering_stemming(queries.title.split())
