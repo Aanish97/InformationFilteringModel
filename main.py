@@ -6,7 +6,7 @@ from math import log
 from glob import glob
 from porter2stemmer import Porter2Stemmer
 import numpy as np
-# from scipy import stats
+from scipy import stats
 
 
 class Topics:
@@ -54,7 +54,9 @@ class Corpus:
         return len([1 for val in self.training_data.values() if term in val.keys()])
 
     def get_count_in_relevant_docs(self, term, relevant_docs):
-
+        """
+        this returns the count of the term in the relevant_docs
+        """
         return len([key for key, val in self.training_data.items() if term in val.keys() if key in relevant_docs])
 
     def get_total_corpus_words(self):
@@ -102,6 +104,9 @@ class Corpus:
 
 
 def get_set(ls, idx):
+    """
+    this returns the Corpus object which of which index is passed as idx
+    """
     for _ls in ls:
         if str(idx) in _ls.name:
             return _ls
@@ -319,7 +324,7 @@ def write_dat_files(score: dict, idx: str, folder_name: str) -> bool:
 
 def write_tfidf_files(score: dict, idx: int, folder_name: str) -> dict:
     """
-    this writs the tf idf scores to files in the folder TF-IDF which is in the root folder
+    this writes the tf idf scores to files in the folder TF-IDF which is in the root folder
     """
     # create the TF-IDF folder if does not exist
     if not os.path.exists(folder_name):
@@ -327,7 +332,6 @@ def write_tfidf_files(score: dict, idx: int, folder_name: str) -> dict:
 
     topic_num = "R{}".format(101+idx)
     # looping over the 50 queries and writing score files one by one
-    # for c, score in zip(range(1, 51, 1), scores.keys()):
     with open('{1}/{0}.txt'.format(topic_num, folder_name), 'w', encoding='utf-8') as w:
         sorted_scores = {k: v for k, v in sorted(score.items(), key=lambda item: item[1], reverse=True)}
         for k, v in sorted_scores.items():
@@ -336,6 +340,10 @@ def write_tfidf_files(score: dict, idx: int, folder_name: str) -> dict:
 
 
 def tf_idf_model(queries: dict, data: dict) -> dict:
+    """
+    this function uses the tfidf model to find the scores of the query in different documents, assigning a score to the
+    document in one of the training_set folders
+    """
     # tokenizing the query words
     query_list = filtering_stemming(queries.title.split())
 
@@ -360,7 +368,15 @@ def tf_idf_model(queries: dict, data: dict) -> dict:
 
 
 def dirichlet_model(queries: dict, data: dict) -> dict:
-
+    """
+    this function uses the dirichlet model to find the scores of the query in different documents, assigning a score
+    to the document in one of the training_set folders,
+    This model is used to find scores of documents which have a small number of terms since it adds a background score
+    to the overall score of the query in the document. This model has a tendency to average well over all the corpus
+    documents, it uses the following formula;
+    dirichlet_score = N/N+u (the probablity of the term to be in document X) + u/u+N (the probablity of the term to
+    be in the entire corpus of documents)
+    """
     q_list = filtering_stemming(queries.title.split())
 
     # constant is the average document length
@@ -410,6 +426,8 @@ def write_relevance_dat_files(relevance_dc: dict, topic: str, folder_name: str) 
 
 def rocchio_information_filtering(data: dict, tf_counts: dict, query: dict):
     """
+    This uses the Roccio information filtering model to calculate the scores of the different queries in the documents
+    in the corpus of training sets
     :param data: relevant documents
     :param tf_counts: the term frequency of different terms in documents
     :param query: the list of query words
@@ -443,17 +461,21 @@ def rocchio_information_filtering(data: dict, tf_counts: dict, query: dict):
     features = [key for key, val in query_df.items() if val > 0]
 
     relevance_dic = {}
+    # finding the relevance scores in the different documents in one of the 50 training sets
     for key, val in tf_counts.training_data.items():
         for _f in features:
             relevance_dic[key] = query_df[_f] * (1 if _f in val.keys() else 0) + relevance_dic.get(key, 0)
 
+    # sorting the scores in the relevance dictionary based on values
     relevance_dic = {k: v for k, v in sorted(relevance_dic.items(), key=lambda item: item[1], reverse=True)}
     return relevance_dic
 
 
 def probability_based_information_filtering(data: dict, tf_counts: dict, query: dict):
-    query_df = tf_counts.get_new_vector()
-    idf_scores = tf_counts.calc_df()
+    """
+    this function returns the probability based model scores i.e. w(4) {in slide of information filtering}, which
+    is one of the best models in information filtering, according to many.
+    """
 
     # number of relevant documents which contain the query word
     relevant_docs = [key for key, val in data.items() if val != 0]
@@ -466,6 +488,7 @@ def probability_based_information_filtering(data: dict, tf_counts: dict, query: 
 
     dc_r = {q: tf_counts.get_count_in_relevant_docs(q, relevant_docs) for q in dc_n.keys()}
 
+    # calculating the scores of terms in the training set, as a vector of scores
     _temp_n = {k: i+0.5 for k, i in dc_r.items()}
     _temp_d = {k: R+i+0.5 for k, i in dc_r.items()}
     weight_vector_n = {k: i/_temp_d[k] for k, i in _temp_n.items()}
@@ -474,9 +497,11 @@ def probability_based_information_filtering(data: dict, tf_counts: dict, query: 
     _temp_d = {k: (N-dc_n[k])-(R-i)+0.5 for k, i in dc_r.items()}
     weight_vector_d = {k: i / _temp_d[k] for k, i in _temp_n.items()}
 
+    # the final vector weight score
     weight_vector = {k: i / weight_vector_d[k] for k, i in weight_vector_n.items()}
 
     relevance_dic = {}
+    # ranking the scores of the queries in different documents
     for key, doc in tf_counts.training_data.items():
         _sum = 0
         for term in doc.keys():
@@ -484,6 +509,7 @@ def probability_based_information_filtering(data: dict, tf_counts: dict, query: 
                 _sum += weight_vector[term]
         relevance_dic[key] = _sum
 
+    # sorting the relevance dictionary based on values
     relevance_dic = {k: v for k, v in sorted(relevance_dic.items(), key=lambda item: item[1], reverse=True)}
     return relevance_dic
 
@@ -517,6 +543,7 @@ def evaluate_model(if_file: str, relevance_judge: str) -> bool:
         if if_score in total_relevant:
             tp += 1
 
+    # finding top k precision, recall and f1 score
     top_k_precision = tp/precision_at_k
     recall = tp/len(total_relevant)
     if top_k_precision + recall == 0:
@@ -591,21 +618,28 @@ if __name__ == '__main__':
                                                                     query_list[doc_num])
         write_relevance_dat_files(relevance_model_2, idx, 'PROBABALISTIC_MODEL')
 
-    # Q6
+    # Q6 - INFORMATION FILTERING MODEL SCORES ARE BETTER
+    if_model_precision_ls = []
+    if_model_recall_ls = []
+    if_model_f1score_ls = []
     with open('EResult1.dat', 'w', encoding='utf-8') as w:
         w.write('Topic  precision  recall     F1\n')
         for idx in range(101, 151, 1):
             t, r, f, = evaluate_model(if_file='IF-ROCCHIO-MODEL/IF_Result{0}.dat'.format(idx),
                                       relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training{0}.txt'.format(idx))
             p = round(t, 4)
+            if_model_precision_ls.append(p)
             r = round(r, 4)
+            if_model_recall_ls.append(r)
             f = round(f, 4)
+            if_model_f1score_ls.append(f)
+
             w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
 
     # Q2, algo 2
     # dirichlet_scores = dirichlet_model(topic_defs, dataset[0])
 
-    # Q3
+    # Q3 - BM25 MODEL SCORES
     ls_bm25_scores = {}
     for idx in range(50):
         doc_num = "R{}".format(101+idx)
@@ -613,16 +647,31 @@ if __name__ == '__main__':
         write_dat_files(score=dc, idx=idx, folder_name='BM25')
         ls_bm25_scores[doc_num] = dc
 
+    base_model_precision_ls = []
+    base_model_recall_ls = []
+    base_model_f1score_ls = []
     with open('EResult2.dat', 'w', encoding='utf-8') as w:
         w.write('Topic  precision  recall     F1\n')
         for idx in range(101, 151, 1):
             t, r, f, = evaluate_model(if_file='BM25/B_Result{0}.dat'.format(idx-100),
                                       relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training{0}.txt'.format(idx))
             p = round(t, 4)
+            base_model_precision_ls.append(p)
             r = round(r, 4)
+            base_model_recall_ls.append(r)
             f = round(f, 4)
+            base_model_f1score_ls.append(f)
             w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
 
+    # conducting the t test
+    np_arr1 = np.array(if_model_precision_ls)
+    np_arr2 = np.array(base_model_precision_ls)
+
+    t_test = stats.ttest_ind(a=np_arr1, b=np_arr2, equal_var=True)
+    print(t_test)
+    print("Since the pvalue of our precision scores is {0}, which is higher than 0.05, we can reject the null "
+          "hypothesis 'there is no difference in effectiveness between your IF Model and the baseline model'"
+          .format(t_test.pvalue))
 
 """
 EResult1.dat is for the IF-ROCCHIO model
