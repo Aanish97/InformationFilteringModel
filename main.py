@@ -414,11 +414,10 @@ def write_relevance_dat_files(relevance_dc: dict, topic: str, folder_name: str) 
     the root folder
     """
     # creating the folder if it does not exist
-    folder = folder_name
-    if not os.path.exists(folder):
-        os.mkdir(folder)
+    if not os.path.exists(folder_name):
+        os.mkdir(folder_name)
 
-    with open('{0}/{2}{1}.dat'.format(folder, topic+101, folder_name), 'w', encoding='utf-8') as w:
+    with open('{0}/{2}{1}.dat'.format(folder_name, topic+101, 'IF_Result'), 'w', encoding='utf-8') as w:
         for score in relevance_dc.items():
             w.write('{0} {1}\n'.format(score[0], score[1]))
 
@@ -664,6 +663,39 @@ if __name__ == '__main__':
             base_model_f1score_ls.append(f)
             w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
 
+    # for dirichlet smoothing scores
+    with open('EResult3.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for idx in range(101, 151, 1):
+            t, r, f, = evaluate_model(if_file='DIRICHLET/B_Result{0}.dat'.format(idx-100),
+                                      relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training{0}.txt'.format(idx))
+            p = round(t, 4)
+            r = round(r, 4)
+            f = round(f, 4)
+            w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
+
+    # for tf idf scores
+    with open('EResult4.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for idx in range(101, 151, 1):
+            t, r, f, = evaluate_model(if_file='TF-IDF/R{0}.txt'.format(idx),
+                                      relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training{0}.txt'.format(idx))
+            p = round(t, 4)
+            r = round(r, 4)
+            f = round(f, 4)
+            w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
+
+    # for information filtering probabalistic model scores
+    with open('EResult5.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for idx in range(101, 151, 1):
+            t, r, f, = evaluate_model(if_file='PROBABALISTIC_MODEL/IF_Result{0}.dat'.format(idx),
+                                      relevance_judge='Tasks2/Tasks2/Relevance_judgments/Training{0}.txt'.format(idx))
+            p = round(t, 4)
+            r = round(r, 4)
+            f = round(f, 4)
+            w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
+
     # conducting the t test
     np_arr1 = np.array(if_model_precision_ls)
     np_arr2 = np.array(base_model_precision_ls)
@@ -677,4 +709,7 @@ if __name__ == '__main__':
 """
 EResult1.dat is for the IF-ROCCHIO model
 EResult2.dat is for the basline bm25 model
+EResult3.dat is for the dirichlet model
+EResult4.dat is for the TF IDF model
+EResult5.dat is for the probabalistic model
 """
