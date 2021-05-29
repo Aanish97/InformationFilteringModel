@@ -622,6 +622,7 @@ if __name__ == '__main__':
     if_model_precision_ls = []
     if_model_recall_ls = []
     if_model_f1score_ls = []
+    scores_if_model = []
     with open('EResult1.dat', 'w', encoding='utf-8') as w:
         w.write('Topic  precision  recall     F1\n')
         for idx in range(101, 151, 1):
@@ -634,7 +635,14 @@ if __name__ == '__main__':
             f = round(f, 4)
             if_model_f1score_ls.append(f)
 
+            scores_if_model.append({'precision': p, 'recall': r, 'f1_score': f, 'idx': idx})
             w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
+
+    sorted_scores = sorted(scores_if_model, key=lambda x: x['precision'], reverse=True)
+    with open('EResult1_1.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for x in sorted_scores[:10]:
+            w.write(f'{x["idx"]:<6} {x["precision"]:<10} {x["recall"]:<10} {x["f1_score"]}\n')
 
     # Q2, algo 2
     # dirichlet_scores = dirichlet_model(topic_defs, dataset[0])
@@ -650,6 +658,7 @@ if __name__ == '__main__':
     base_model_precision_ls = []
     base_model_recall_ls = []
     base_model_f1score_ls = []
+    scores_bm25_model = []
     with open('EResult2.dat', 'w', encoding='utf-8') as w:
         w.write('Topic  precision  recall     F1\n')
         for idx in range(101, 151, 1):
@@ -661,7 +670,15 @@ if __name__ == '__main__':
             base_model_recall_ls.append(r)
             f = round(f, 4)
             base_model_f1score_ls.append(f)
+
+            scores_bm25_model.append({'precision': p, 'recall': r, 'f1_score': f, "idx": idx})
             w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
+
+    sorted_scores = sorted(scores_bm25_model, key=lambda x: x['precision'], reverse=True)
+    with open('EResult2_1.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for x in sorted_scores[:10]:
+            w.write(f'{x["idx"]:<6} {x["precision"]:<10} {x["recall"]:<10} {x["f1_score"]}\n')
 
     # for dirichlet smoothing scores
     with open('EResult3.dat', 'w', encoding='utf-8') as w:
@@ -685,6 +702,7 @@ if __name__ == '__main__':
             f = round(f, 4)
             w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
 
+    scores_probabalistic_model = []
     # for information filtering probabalistic model scores
     with open('EResult5.dat', 'w', encoding='utf-8') as w:
         w.write('Topic  precision  recall     F1\n')
@@ -694,7 +712,15 @@ if __name__ == '__main__':
             p = round(t, 4)
             r = round(r, 4)
             f = round(f, 4)
+
+            scores_probabalistic_model.append({'precision': p, 'recall': r, 'f1_score': f, "idx": idx})
             w.write(f'{idx:<6} {p:<10} {r:<10} {f}\n')
+
+    sorted_scores = sorted(scores_probabalistic_model, key=lambda x: x['precision'], reverse=True)
+    with open('EResult5_1.dat', 'w', encoding='utf-8') as w:
+        w.write('Topic  precision  recall     F1\n')
+        for x in sorted_scores[:10]:
+            w.write(f'{x["idx"]:<6} {x["precision"]:<10} {x["recall"]:<10} {x["f1_score"]}\n')
 
     # conducting the t test
     np_arr1 = np.array(if_model_precision_ls)
